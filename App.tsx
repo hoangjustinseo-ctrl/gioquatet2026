@@ -14,40 +14,65 @@ const App: React.FC = () => {
   const [selectedPriceRange, setSelectedPriceRange] = useState<PriceRange>(PriceRange.ALL);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [secretClickCount, setSecretClickCount] = useState(0);
+
+  // Cơ chế mã hóa đơn giản để che mắt người dùng thông thường
+  const obscureData = (data: any) => btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  const deobscureData = (data: string) => JSON.parse(decodeURIComponent(escape(atob(data))));
 
   useEffect(() => {
-    // Load local storage products if any
-    const localProds = localStorage.getItem('custom_products');
-    const custom = localProds ? JSON.parse(localProds) : [];
-    setProducts([...INITIAL_PRODUCTS, ...custom]);
-
-    // Handle hidden admin route via hash
-    const handleHash = () => {
-      if (window.location.hash === '#/admin') {
-        setIsAdminOpen(true);
-      } else {
-        setIsAdminOpen(false);
+    const localData = localStorage.getItem('_qt26_secure_storage_v4');
+    let custom: Product[] = [];
+    if (localData) {
+      try {
+        custom = deobscureData(localData);
+      } catch (e) {
+        console.error("Lỗi dữ liệu bảo mật");
       }
-    };
-    
-    window.addEventListener('hashchange', handleHash);
-    handleHash();
-    return () => window.removeEventListener('hashchange', handleHash);
+    }
+    setProducts([...INITIAL_PRODUCTS, ...custom]);
   }, []);
+
+  const handleSecretClick = () => {
+    setSecretClickCount(prev => {
+      const newCount = prev + 1;
+      if (newCount >= 5) {
+        setIsAdminOpen(true);
+        return 0;
+      }
+      return newCount;
+    });
+    
+    const timer = setTimeout(() => setSecretClickCount(0), 3000);
+    return () => clearTimeout(timer);
+  };
+
+  const saveToLocal = (allProds: Product[]) => {
+    const custom = allProds.filter(p => p.id.startsWith('custom-'));
+    localStorage.setItem('_qt26_secure_storage_v4', obscureData(custom));
+  };
 
   const addProduct = (newProd: Product) => {
     const updated = [...products, newProd];
     setProducts(updated);
-    
-    // Persist only custom products
-    const custom = updated.filter(p => !INITIAL_PRODUCTS.find(i => i.id === p.id));
-    localStorage.setItem('custom_products', JSON.stringify(custom));
+    saveToLocal(updated);
+  };
+
+  const deleteProduct = (id: string) => {
+    const updated = products.filter(p => p.id !== id);
+    setProducts(updated);
+    saveToLocal(updated);
+  };
+
+  const importProducts = (newProds: Product[]) => {
+    const updated = [...products, ...newProds];
+    setProducts(updated);
+    saveToLocal(updated);
   };
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
       const matchCat = selectedCategory.length === 0 || selectedCategory.includes(product.category);
-      
       let matchPrice = true;
       if (selectedPriceRange !== PriceRange.ALL) {
         const p = product.price;
@@ -58,32 +83,34 @@ const App: React.FC = () => {
           case PriceRange.OVER_2000: matchPrice = p > 2000000; break;
         }
       }
-      
       return matchCat && matchPrice;
     });
   }, [products, selectedCategory, selectedPriceRange]);
 
-  const closeAdmin = () => {
-    window.location.hash = '';
-    setIsAdminOpen(false);
-  };
-
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-[#fdfdfd] selection:bg-orange-100">
       <Navbar />
 
       <main className="flex-grow max-w-7xl mx-auto px-4 py-8 w-full">
-        {/* Banner Section */}
-        <section className="mb-12">
-          <div className="flex flex-wrap gap-4 mb-8">
-            {Object.values(FilterCategory).map(cat => (
+        <section className="mb-10">
+          <div className="flex flex-wrap gap-2 mb-8">
+            <button 
+              onClick={() => setSelectedCategory([])}
+              className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest transition-all
+                ${selectedCategory.length === 0 
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
+                  : 'bg-white text-gray-400 border border-gray-100 hover:border-orange-200'}`}
+            >
+              {FilterCategory.ALL}
+            </button>
+            {Object.values(FilterCategory).filter(v => v !== FilterCategory.ALL).map(cat => (
               <button 
                 key={cat}
                 onClick={() => setSelectedCategory(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
-                className={`px-6 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all shadow-sm
-                  ${selectedCategory.includes(cat) || (selectedCategory.length === 0 && cat === FilterCategory.ALL)
-                    ? 'bg-orange-600 text-white' 
-                    : 'bg-white text-orange-600 border border-orange-100 hover:border-orange-600'}`}
+                className={`px-5 py-2 rounded-full text-[11px] font-black uppercase tracking-widest transition-all
+                  ${selectedCategory.includes(cat)
+                    ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' 
+                    : 'bg-white text-gray-400 border border-gray-100 hover:border-orange-200'}`}
               >
                 {cat}
               </button>
@@ -91,9 +118,8 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
-          <aside className="lg:w-64">
+        <div className="flex flex-col lg:flex-row gap-12">
+          <aside className="lg:w-64 flex-shrink-0">
             <SidebarFilters 
               selectedCategory={selectedCategory}
               setSelectedCategory={setSelectedCategory}
@@ -102,73 +128,70 @@ const App: React.FC = () => {
             />
           </aside>
 
-          {/* Grid */}
           <div className="flex-grow">
             {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
                 {filteredProducts.map(product => (
-                  <ProductCard 
-                    key={product.id} 
-                    product={product} 
-                    onClick={setSelectedProduct} 
-                  />
+                  <ProductCard key={product.id} product={product} onClick={setSelectedProduct} />
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <p className="text-xl">Không tìm thấy sản phẩm phù hợp</p>
-                <button 
-                  onClick={() => { setSelectedCategory([]); setSelectedPriceRange(PriceRange.ALL); }}
-                  className="mt-4 text-orange-600 font-bold underline"
-                >
-                  Xóa tất cả bộ lọc
-                </button>
+              <div className="py-40 text-center bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
+                <p className="text-gray-400 font-medium italic">Không tìm thấy sản phẩm yêu cầu...</p>
               </div>
             )}
           </div>
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-12 mt-12">
-        <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-3 gap-12">
-          <div className="space-y-4">
-            <h4 className="font-black text-xl text-orange-600">GIỎ QUÀ TẾT 2026</h4>
-            <p className="text-gray-500 text-sm leading-relaxed">
-              Chúng tôi cung cấp các giải pháp quà tặng Tết chuyên nghiệp, đẳng cấp cho cá nhân và doanh nghiệp. Tinh hoa nông sản Việt hội tụ trong từng giỏ quà.
+      <footer className="bg-gray-900 text-white py-20 mt-20">
+        <div className="max-w-7xl mx-auto px-4 grid md:grid-cols-4 gap-12 border-b border-gray-800 pb-20">
+          <div className="col-span-1 md:col-span-2 space-y-6">
+            <div className="flex items-center space-x-2">
+              <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center text-white font-black text-xl">G</div>
+              <span className="text-2xl font-black tracking-tighter">GIỎ QUÀ TẾT 2026</span>
+            </div>
+            <p className="text-gray-400 text-sm leading-relaxed max-w-md">
+              Hệ thống cung cấp quà tặng Tết cao cấp cho doanh nghiệp và cá nhân. Mỗi sản phẩm là một lời chúc bình an, phú quý gửi gắm đến người thân, đối tác.
             </p>
           </div>
           <div>
-            <h5 className="font-bold mb-4 uppercase text-xs tracking-widest text-gray-400">Liên kết</h5>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><a href="#" className="hover:text-orange-600 transition-colors">Chính sách vận chuyển</a></li>
-              <li><a href="#" className="hover:text-orange-600 transition-colors">Chính sách bảo mật</a></li>
-              <li><a href="#" className="hover:text-orange-600 transition-colors">Hướng dẫn đặt hàng</a></li>
+            <h5 className="font-bold text-orange-500 mb-6 uppercase text-xs tracking-widest">Hỗ trợ khách hàng</h5>
+            <ul className="space-y-4 text-sm text-gray-400 font-medium">
+              <li><a href="#" className="hover:text-white transition-colors">Hướng dẫn mua hàng</a></li>
+              <li><a href="#" className="hover:text-white transition-colors">Chính sách vận chuyển</a></li>
+              <li><a href="#" className="hover:text-white transition-colors">Đổi trả sản phẩm</a></li>
             </ul>
           </div>
           <div>
-            <h5 className="font-bold mb-4 uppercase text-xs tracking-widest text-gray-400">Liên hệ</h5>
-            <p className="text-sm text-gray-600 mb-2">📍 Hà Nội & TP. Hồ Chí Minh</p>
-            <p className="text-sm text-gray-600 mb-2">📞 Hotline: 0985 023 463</p>
-            <p className="text-sm text-gray-600">📧 Email: contact@gioquatet2026.vn</p>
+            <h5 className="font-bold text-orange-500 mb-6 uppercase text-xs tracking-widest">Văn phòng</h5>
+            <div className="space-y-4 text-sm text-gray-400">
+              <p>📍 Số 123 Đường Láng, Hà Nội</p>
+              <p>📍 Số 456 Nguyễn Huệ, Quận 1, HCM</p>
+              <p>📞 Hotline: 0985 023 463</p>
+            </div>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-4 mt-12 pt-8 border-t border-gray-50 text-center text-xs text-gray-400">
-          © 2025 Giỏ Quà Tết 2026. Design by World-Class Engineer.
+        <div className="max-w-7xl mx-auto px-4 pt-10 flex justify-between items-center text-[10px] text-gray-600 font-bold uppercase tracking-widest">
+          <span>© 2026 GIỎ QUÀ TẾT VIỆT</span>
+          <span 
+            className="cursor-pointer hover:text-gray-400 transition-all select-none opacity-50"
+            onClick={handleSecretClick}
+          >
+            Được thiết kế bởi World-Class Team
+          </span>
         </div>
       </footer>
 
-      {/* Popups */}
-      <ProductModal 
-        product={selectedProduct} 
-        onClose={() => setSelectedProduct(null)} 
-      />
+      <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
       
       {isAdminOpen && (
         <AdminPanel 
+          products={products}
           onAddProduct={addProduct} 
-          onClose={closeAdmin} 
+          onDeleteProduct={deleteProduct}
+          onImportProducts={importProducts}
+          onClose={() => setIsAdminOpen(false)} 
         />
       )}
     </div>
