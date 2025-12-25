@@ -10,11 +10,11 @@ interface AdminPanelProps {
   onClose: () => void;
 }
 
-// Thông tin đăng nhập đã được xử lý (Conceptual Hashing)
+// Thông tin đăng nhập đã được xử lý (Base64)
 const AUTH_CONFIG = {
-  u: "SG9hbmdWeUdpb3F1YXRldA==", // HoangVyGioquatet (Base64)
-  p: "R2lvcXVhdGV0MjAyN0AxMjg=", // Gioquatet2026@128 (Base64)
-  sessionKey: "_secure_admin_session_v3"
+  u: "SG9hbmdWeUdpb3F1YXRldA==", // HoangVyGioquatet
+  p: "R2lvcXVhdGV0MjAyNkAxMjg=", // Gioquatet2026@128 (Đã sửa từ 2027 thành 2026)
+  sessionKey: "_secure_admin_session_v4"
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDeleteProduct, onImportProducts, onClose }) => {
@@ -41,7 +41,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
     e.preventDefault();
     if (isLocked) return;
 
-    if (btoa(username) === AUTH_CONFIG.u && btoa(password) === AUTH_CONFIG.p) {
+    // Chống hack: So sánh bằng cách mã hóa input đầu vào rồi đối chiếu với chuỗi bảo mật
+    const encodedU = btoa(username);
+    const encodedP = btoa(password);
+
+    if (encodedU === AUTH_CONFIG.u && encodedP === AUTH_CONFIG.p) {
       sessionStorage.setItem(AUTH_CONFIG.sessionKey, 'active');
       setView('dashboard');
       setAttempts(0);
@@ -51,9 +55,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
       if (newAttempts >= 3) {
         setIsLocked(true);
         setTimeout(() => { setIsLocked(false); setAttempts(0); }, 30000);
-        alert('Sai quá nhiều lần! Hệ thống tạm khóa 30 giây.');
+        alert('Thông tin không chính xác. Tài khoản tạm khóa 30 giây để bảo mật!');
       } else {
-        alert(`Thông tin không chính xác! Còn ${3 - newAttempts} lần thử.`);
+        alert(`Tên đăng nhập hoặc mật khẩu không đúng! Bạn còn ${3 - newAttempts} lần thử.`);
       }
     }
   };
@@ -68,14 +72,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
       const lines = text.split('\n');
       const newProducts: Product[] = [];
       
-      // Bỏ qua dòng header nếu có: Tên,Giá,Danh mục,Mô tả,Ảnh(phân cách |)
       lines.slice(1).forEach(line => {
-        const [name, price, category, desc, imgs] = line.split(',');
-        if (name && price) {
+        const parts = line.split(',');
+        if (parts.length >= 2) {
+          const [name, price, category, desc, imgs] = parts;
           newProducts.push({
             id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: name.trim(),
-            price: parseInt(price.trim()),
+            name: name?.trim(),
+            price: parseInt(price?.trim() || '0'),
             category: (category?.trim() as FilterCategory) || FilterCategory.COMBO,
             description: desc?.trim() || '',
             images: imgs ? imgs.split('|').map(i => i.trim()) : [],
@@ -101,32 +105,46 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
 
   if (view === 'login') {
     return (
-      <div className="fixed inset-0 z-[120] bg-black/98 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-gray-900 p-8 rounded-[2rem] border border-gray-800 shadow-2xl">
-          <div className="text-center mb-8">
-            <div className="inline-flex p-4 bg-orange-600/10 rounded-2xl mb-4">
-              <svg className="w-10 h-10 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+      <div className="fixed inset-0 z-[120] bg-black/95 flex items-center justify-center p-6 backdrop-blur-md">
+        <div className="max-w-md w-full bg-gray-900 p-8 rounded-[2.5rem] border border-gray-800 shadow-2xl">
+          <div className="text-center mb-10">
+            <div className="inline-flex p-5 bg-orange-600/10 rounded-full mb-6">
+              <svg className="w-12 h-12 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
             </div>
-            <h2 className="text-xl font-black text-white uppercase tracking-widest">Hệ thống quản trị</h2>
+            <h2 className="text-2xl font-black text-white uppercase tracking-widest">Xác thực Admin</h2>
+            <p className="text-gray-500 text-xs mt-2 font-bold uppercase tracking-widest">Truy cập hệ thống quản trị</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input 
-              type="text" placeholder="Tên đăng nhập" 
-              className="w-full bg-gray-800 border-none rounded-xl p-4 text-white outline-none focus:ring-2 focus:ring-orange-600"
-              value={username} onChange={e => setUsername(e.target.value)}
-            />
-            <input 
-              type="password" placeholder="Mật khẩu" 
-              className="w-full bg-gray-800 border-none rounded-xl p-4 text-white outline-none focus:ring-2 focus:ring-orange-600"
-              value={password} onChange={e => setPassword(e.target.value)}
-            />
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Tên người dùng</label>
+              <input 
+                type="text" 
+                placeholder="Username" 
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-orange-600 focus:border-transparent transition-all"
+                value={username} 
+                onChange={e => setUsername(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Mật khẩu bảo mật</label>
+              <input 
+                type="password" 
+                placeholder="Password" 
+                className="w-full bg-gray-800 border border-gray-700 rounded-2xl p-4 text-white outline-none focus:ring-2 focus:ring-orange-600 focus:border-transparent transition-all"
+                value={password} 
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
             <button 
               disabled={isLocked}
-              className={`w-full py-4 rounded-xl font-black transition-all ${isLocked ? 'bg-gray-700 text-gray-500' : 'bg-orange-600 text-white hover:bg-orange-700'}`}
+              className={`w-full py-5 rounded-2xl font-black transition-all shadow-xl ${isLocked ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-orange-600 text-white hover:bg-orange-700 active:scale-95'}`}
             >
-              {isLocked ? 'ĐANG KHÓA...' : 'ĐĂNG NHẬP'}
+              {isLocked ? 'ĐANG KHÓA TRUY CẬP...' : 'VÀO HỆ THỐNG'}
             </button>
-            <button type="button" onClick={onClose} className="w-full text-gray-500 text-xs font-bold hover:text-gray-300">THOÁT</button>
+            <button type="button" onClick={onClose} className="w-full text-gray-500 text-[10px] font-black hover:text-gray-300 uppercase tracking-widest mt-4">Quay về trang chủ</button>
           </form>
         </div>
       </div>
@@ -134,44 +152,51 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
   }
 
   return (
-    <div className="fixed inset-0 z-[110] bg-gray-950 text-white overflow-hidden flex flex-col">
-      {/* Admin Header */}
+    <div className="fixed inset-0 z-[110] bg-gray-950 text-white overflow-hidden flex flex-col font-sans">
       <div className="bg-gray-900 px-8 py-6 border-b border-gray-800 flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center font-black">A</div>
+          <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center font-black shadow-lg shadow-orange-600/20">A</div>
           <div>
-            <h2 className="font-black text-sm uppercase tracking-tighter">Admin Dashboard</h2>
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Giỏ Quà Tết 2026</p>
+            <h2 className="font-black text-sm uppercase tracking-tighter">Hệ thống Quản Trị</h2>
+            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Admin Session Active</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg text-xs font-bold ${view === 'dashboard' ? 'bg-gray-800 text-orange-500' : 'text-gray-400'}`}>Tổng quan</button>
-          <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg text-xs font-bold ${view === 'list' ? 'bg-gray-800 text-orange-500' : 'text-gray-400'}`}>Danh sách</button>
-          <button onClick={handleLogout} className="px-4 py-2 bg-red-600/10 text-red-500 rounded-lg text-xs font-bold hover:bg-red-600/20">Đăng xuất</button>
+        <div className="flex items-center space-x-3">
+          <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${view === 'dashboard' ? 'bg-orange-600 text-white' : 'text-gray-400 hover:text-white'}`}>Tổng quan</button>
+          <button onClick={() => setView('list')} className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all ${view === 'list' ? 'bg-orange-600 text-white' : 'text-gray-400 hover:text-white'}`}>Sản phẩm</button>
+          <div className="w-[1px] h-6 bg-gray-800 mx-2"></div>
+          <button onClick={handleLogout} className="px-4 py-2 bg-red-600/10 text-red-500 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all">Đăng xuất</button>
         </div>
       </div>
 
-      <div className="flex-grow overflow-y-auto p-8 custom-scrollbar">
+      <div className="flex-grow overflow-y-auto p-12 custom-scrollbar bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950">
         {view === 'dashboard' && (
-          <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gray-900 p-8 rounded-3xl border border-gray-800 text-center">
-              <p className="text-gray-500 text-xs font-bold uppercase mb-2">Tổng sản phẩm</p>
-              <h3 className="text-5xl font-black text-orange-600">{products.length}</h3>
-            </div>
-            <div className="bg-gray-900 p-8 rounded-3xl border border-gray-800 flex flex-col justify-center cursor-pointer hover:border-orange-600 transition-all" onClick={() => setView('add')}>
-              <div className="mx-auto mb-2 text-orange-600"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg></div>
-              <p className="text-center font-bold text-sm">Thêm sản phẩm mới</p>
-            </div>
-            <div className="bg-gray-900 p-8 rounded-3xl border border-gray-800 flex flex-col justify-center cursor-pointer hover:border-orange-600 transition-all" onClick={() => setView('import')}>
-              <div className="mx-auto mb-2 text-orange-600"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg></div>
-              <p className="text-center font-bold text-sm">Nhập từ CSV</p>
+          <div className="max-w-5xl mx-auto space-y-12">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-gray-900 p-10 rounded-[2.5rem] border border-gray-800 text-center shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-600/5 rounded-full -mr-16 -mt-16 group-hover:bg-orange-600/10 transition-all"></div>
+                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">Tổng số sản phẩm</p>
+                <h3 className="text-6xl font-black text-orange-600">{products.length}</h3>
+              </div>
+              <div onClick={() => setView('add')} className="bg-gray-900 p-10 rounded-[2.5rem] border border-gray-800 flex flex-col items-center justify-center cursor-pointer hover:border-orange-600/50 hover:bg-gray-800/40 transition-all group shadow-2xl">
+                <div className="w-16 h-16 bg-orange-600/10 rounded-2xl flex items-center justify-center text-orange-600 mb-6 group-hover:scale-110 transition-transform">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                </div>
+                <p className="font-black text-xs uppercase tracking-widest">Thêm sản phẩm mới</p>
+              </div>
+              <div onClick={() => setView('import')} className="bg-gray-900 p-10 rounded-[2.5rem] border border-gray-800 flex flex-col items-center justify-center cursor-pointer hover:border-orange-600/50 hover:bg-gray-800/40 transition-all group shadow-2xl">
+                <div className="w-16 h-16 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-500 mb-6 group-hover:scale-110 transition-transform">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                </div>
+                <p className="font-black text-xs uppercase tracking-widest">Nhập dữ liệu CSV</p>
+              </div>
             </div>
           </div>
         )}
 
         {view === 'add' && (
-          <div className="max-w-2xl mx-auto bg-gray-900 p-10 rounded-3xl border border-gray-800">
-            <h3 className="text-xl font-black mb-8 border-b border-gray-800 pb-4">TẠO SẢN PHẨM MỚI</h3>
+          <div className="max-w-2xl mx-auto bg-gray-900 p-12 rounded-[3rem] border border-gray-800 shadow-2xl">
+            <h3 className="text-2xl font-black mb-10 border-b border-gray-800 pb-6 uppercase tracking-widest">Tạo sản phẩm mới</h3>
             <form className="space-y-6" onSubmit={(e) => {
               e.preventDefault();
               onAddProduct({
@@ -180,55 +205,81 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
                 price: parseInt(formData.price),
                 category: formData.category,
                 description: formData.description,
-                images: formData.imageUrls.split(',').map(u => u.trim()),
+                images: formData.imageUrls.split(',').map(u => u.trim()).filter(u => u),
                 isSoldOut: false
               });
-              alert('Thành công!');
+              alert('Thêm sản phẩm thành công!');
               setView('dashboard');
             }}>
-              <input type="text" placeholder="Tên sản phẩm *" className="w-full bg-gray-800 rounded-xl p-4 outline-none border border-transparent focus:border-orange-600" required onChange={e => setFormData({...formData, name: e.target.value})} />
-              <div className="grid grid-cols-2 gap-4">
-                <input type="number" placeholder="Giá tiền *" className="w-full bg-gray-800 rounded-xl p-4 outline-none border border-transparent focus:border-orange-600" required onChange={e => setFormData({...formData, price: e.target.value})} />
-                <select className="w-full bg-gray-800 rounded-xl p-4 outline-none border border-transparent focus:border-orange-600" onChange={e => setFormData({...formData, category: e.target.value as FilterCategory})}>
-                  {Object.values(FilterCategory).map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Tên hiển thị *</label>
+                <input type="text" placeholder="Nhập tên sản phẩm..." className="w-full bg-gray-800 rounded-2xl p-4 outline-none border border-transparent focus:border-orange-600 transition-all" required onChange={e => setFormData({...formData, name: e.target.value})} />
               </div>
-              <textarea placeholder="URL Ảnh (cách nhau dấu phẩy) *" className="w-full bg-gray-800 rounded-xl p-4 outline-none border border-transparent focus:border-orange-600 h-24" required onChange={e => setFormData({...formData, imageUrls: e.target.value})} />
-              <textarea placeholder="Mô tả" className="w-full bg-gray-800 rounded-xl p-4 outline-none border border-transparent focus:border-orange-600 h-32" onChange={e => setFormData({...formData, description: e.target.value})} />
-              <div className="flex gap-4">
-                <button type="button" onClick={() => setView('dashboard')} className="flex-1 py-4 text-gray-500 font-bold">HỦY</button>
-                <button type="submit" className="flex-1 bg-orange-600 py-4 rounded-xl font-black">XÁC NHẬN LƯU</button>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Giá tiền (VNĐ) *</label>
+                  <input type="number" placeholder="Ví dụ: 500000" className="w-full bg-gray-800 rounded-2xl p-4 outline-none border border-transparent focus:border-orange-600 transition-all" required onChange={e => setFormData({...formData, price: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Phân loại *</label>
+                  <select className="w-full bg-gray-800 rounded-2xl p-4 outline-none border border-transparent focus:border-orange-600 transition-all appearance-none cursor-pointer" onChange={e => setFormData({...formData, category: e.target.value as FilterCategory})}>
+                    {Object.values(FilterCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Link ảnh (phân cách bằng dấu phẩy) *</label>
+                <textarea placeholder="https://anh1.jpg, https://anh2.jpg" className="w-full bg-gray-800 rounded-2xl p-4 outline-none border border-transparent focus:border-orange-600 transition-all h-24 resize-none" required onChange={e => setFormData({...formData, imageUrls: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Mô tả chi tiết</label>
+                <textarea placeholder="Nội dung mô tả sản phẩm..." className="w-full bg-gray-800 rounded-2xl p-4 outline-none border border-transparent focus:border-orange-600 transition-all h-40 resize-none" onChange={e => setFormData({...formData, description: e.target.value})} />
+              </div>
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => setView('dashboard')} className="flex-1 py-4 text-gray-500 font-black uppercase tracking-widest text-xs hover:text-white transition-all">Hủy bỏ</button>
+                <button type="submit" className="flex-1 bg-orange-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-600/20 active:scale-95 transition-all">Lưu sản phẩm</button>
               </div>
             </form>
           </div>
         )}
 
         {view === 'list' && (
-          <div className="max-w-5xl mx-auto">
-             <div className="bg-gray-900 rounded-3xl border border-gray-800 overflow-hidden">
+          <div className="max-w-6xl mx-auto">
+             <div className="flex justify-between items-end mb-8">
+               <div>
+                 <h3 className="text-3xl font-black uppercase tracking-tighter">Danh sách sản phẩm</h3>
+                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-2">Quản lý và chỉnh sửa kho hàng</p>
+               </div>
+               <button onClick={() => setView('add')} className="bg-orange-600 px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20">Thêm mới +</button>
+             </div>
+             <div className="bg-gray-900 rounded-[2.5rem] border border-gray-800 overflow-hidden shadow-2xl">
                 <table className="w-full text-left">
-                  <thead className="bg-gray-800/50 text-xs font-black uppercase tracking-widest text-gray-500">
+                  <thead className="bg-gray-800/50 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
                     <tr>
-                      <th className="px-6 py-4">Sản phẩm</th>
-                      <th className="px-6 py-4">Giá</th>
-                      <th className="px-6 py-4">Loại</th>
-                      <th className="px-6 py-4 text-right">Thao tác</th>
+                      <th className="px-8 py-6">Thông tin sản phẩm</th>
+                      <th className="px-8 py-6">Giá niêm yết</th>
+                      <th className="px-8 py-6">Phân loại</th>
+                      <th className="px-8 py-6 text-right">Quản lý</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800">
+                  <tbody className="divide-y divide-gray-800/50">
                     {products.map(p => (
-                      <tr key={p.id} className="hover:bg-gray-800/20 transition-colors">
-                        <td className="px-6 py-4 flex items-center space-x-3">
-                          <img src={p.images[0]} className="w-10 h-10 rounded object-cover" />
-                          <span className="font-bold text-sm">{p.name}</span>
+                      <tr key={p.id} className="hover:bg-gray-800/30 transition-colors">
+                        <td className="px-8 py-5 flex items-center space-x-4">
+                          <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-800 flex-shrink-0 border border-gray-700">
+                            <img src={p.images[0]} className="w-full h-full object-cover" />
+                          </div>
+                          <span className="font-bold text-sm tracking-tight">{p.name}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm font-bold text-orange-500">{p.price.toLocaleString()}đ</td>
-                        <td className="px-6 py-4 text-xs font-bold text-gray-400 uppercase">{p.category}</td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-8 py-5 text-sm font-black text-orange-500">{p.price.toLocaleString()}đ</td>
+                        <td className="px-8 py-5">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-800 px-3 py-1 rounded-full">{p.category}</span>
+                        </td>
+                        <td className="px-8 py-5 text-right">
                           {p.id.startsWith('custom-') ? (
-                            <button onClick={() => { if(confirm('Xóa sản phẩm này?')) onDeleteProduct(p.id); }} className="text-red-500 hover:text-red-400 text-xs font-black uppercase tracking-tighter">Xóa bỏ</button>
+                            <button onClick={() => { if(confirm('Bạn có chắc chắn muốn xóa vĩnh viễn sản phẩm này?')) onDeleteProduct(p.id); }} className="text-red-500 hover:text-white hover:bg-red-600 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">Xóa</button>
                           ) : (
-                            <span className="text-gray-700 text-[10px] uppercase font-black">Hệ thống</span>
+                            <span className="text-gray-700 text-[9px] uppercase font-black tracking-widest border border-gray-800 px-3 py-1 rounded-md">Mặc định</span>
                           )}
                         </td>
                       </tr>
@@ -240,17 +291,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ products, onAddProduct, onDelet
         )}
 
         {view === 'import' && (
-          <div className="max-w-xl mx-auto text-center space-y-8 bg-gray-900 p-12 rounded-3xl border border-gray-800">
-            <h3 className="text-2xl font-black">NHẬP DỮ LIỆU CSV</h3>
-            <p className="text-gray-400 text-sm italic">File CSV cấu trúc: Tên, Giá, Danh mục, Mô tả, Ảnh1|Ảnh2</p>
-            <div className="border-2 border-dashed border-gray-700 rounded-3xl p-10 hover:border-orange-600 transition-colors cursor-pointer relative">
-              <input type="file" accept=".csv" onChange={handleCsvImport} className="absolute inset-0 opacity-0 cursor-pointer" />
-              <div className="text-gray-500 space-y-4">
-                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <p className="font-bold">Nhấn để chọn file hoặc kéo thả</p>
+          <div className="max-w-xl mx-auto text-center space-y-10 bg-gray-900 p-16 rounded-[3.5rem] border border-gray-800 shadow-2xl">
+            <div>
+              <h3 className="text-3xl font-black uppercase tracking-tighter mb-4">Nhập dữ liệu lớn</h3>
+              <p className="text-gray-500 text-xs font-medium leading-relaxed">Vui lòng sử dụng file CSV chuẩn. Cấu trúc: <br/><code className="text-orange-500 bg-gray-800 px-2 py-1 rounded mt-2 inline-block">Tên, Giá, Danh mục, Mô tả, Ảnh1|Ảnh2</code></p>
+            </div>
+            <div className="border-4 border-dashed border-gray-800 rounded-[2.5rem] p-16 hover:border-orange-600/50 transition-all cursor-pointer relative group bg-gray-950/30">
+              <input type="file" accept=".csv" onChange={handleCsvImport} className="absolute inset-0 opacity-0 cursor-pointer z-10" title="" />
+              <div className="text-gray-500 space-y-6 group-hover:text-gray-300 transition-all">
+                <svg className="w-16 h-16 mx-auto opacity-20 group-hover:opacity-100 group-hover:text-orange-600 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <div className="space-y-2">
+                   <p className="font-black text-sm uppercase tracking-widest">Kéo thả file .csv vào đây</p>
+                   <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Hoặc click để duyệt file từ máy tính</p>
+                </div>
               </div>
             </div>
-            <button onClick={() => setView('dashboard')} className="text-gray-500 font-bold text-sm">Quay lại</button>
+            <button onClick={() => setView('dashboard')} className="text-gray-600 font-black text-[10px] uppercase tracking-[0.3em] hover:text-white transition-all">Quay lại Dashboard</button>
           </div>
         )}
       </div>
