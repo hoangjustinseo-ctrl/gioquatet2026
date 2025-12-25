@@ -6,7 +6,7 @@ import ProductCard from './components/ProductCard';
 import ProductModal from './components/ProductModal';
 import AdminPanel from './components/AdminPanel';
 import { Product, PriceRange, FilterCategory } from './types';
-import { INITIAL_PRODUCTS } from './constants';
+import { INITIAL_PRODUCTS, HOTLINE } from './constants';
 
 const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -168,7 +168,7 @@ const App: React.FC = () => {
             <div className="space-y-4 text-sm text-gray-400">
               <p>📍 Số 123 Đường Láng, Hà Nội</p>
               <p>📍 Số 456 Nguyễn Huệ, Quận 1, HCM</p>
-              <p>📞 Hotline: 0985 023 463</p>
+              <p>📞 Hotline: {HOTLINE}</p>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@
 import { Product, FilterCategory } from './types';
 
 export const FANPAGE_URL = "https://www.facebook.com/profile.php?id=61584802095138&locale=vi_VN";
+export const HOTLINE = "0947 134 735";
 
 export const INITIAL_PRODUCTS: Product[] = [
   {
